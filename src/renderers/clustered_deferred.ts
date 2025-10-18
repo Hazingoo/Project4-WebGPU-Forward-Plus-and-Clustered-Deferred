@@ -26,6 +26,10 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     cameraBindGroupLayout!: GPUBindGroupLayout;
     cameraBindGroup!: GPUBindGroup;
 
+    fullscreenPassPipeline!: GPURenderPipeline;
+    sceneBindGroupLayout!: GPUBindGroupLayout;
+    sceneBindGroup!: GPUBindGroup;
+
     constructor(stage: Stage) {
         super(stage);
 
@@ -35,6 +39,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         this.setupGeometryPass();
 
+        this.setupFullscreenPass();
     }
 
     private setupGBuffer() {
@@ -259,6 +264,86 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     },
                     {
                         format: "rgba16float"
+                    }
+                ]
+            }
+        });
+    }
+
+    private setupFullscreenPass() {
+        this.sceneBindGroupLayout = renderer.device.createBindGroupLayout({
+            label: "fullscreen scene bind group layout",
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "uniform" }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
+                },
+                {
+                    binding: 3,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
+                }
+            ]
+        });
+
+        this.sceneBindGroup = renderer.device.createBindGroup({
+            label: "fullscreen scene bind group",
+            layout: this.sceneBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: this.camera.uniformsBuffer }
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: this.lights.lightSetStorageBuffer }
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: this.clusterSetBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.clusterLightIndicesBuffer }
+                }
+            ]
+        });
+
+        this.fullscreenPassPipeline = renderer.device.createRenderPipeline({
+            label: "clustered deferred fullscreen pass pipeline",
+            layout: renderer.device.createPipelineLayout({
+                label: "clustered deferred fullscreen pass pipeline layout",
+                bindGroupLayouts: [
+                    this.sceneBindGroupLayout,
+                    this.gBufferBindGroupLayout
+                ]
+            }),
+            vertex: {
+                module: renderer.device.createShaderModule({
+                    label: "clustered deferred fullscreen vert shader",
+                    code: shaders.clusteredDeferredFullscreenVertSrc
+                }),
+                entryPoint: "main"
+            },
+            fragment: {
+                module: renderer.device.createShaderModule({
+                    label: "clustered deferred fullscreen frag shader",
+                    code: shaders.clusteredDeferredFullscreenFragSrc
+                }),
+                targets: [
+                    {
+                        format: renderer.canvasFormat
                     }
                 ]
             }
