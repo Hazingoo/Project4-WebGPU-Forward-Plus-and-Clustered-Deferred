@@ -27,6 +27,19 @@ struct ClusterSet {
 struct CameraUniforms {
     // TODO-1.3: add an entry for the view proj mat (of type mat4x4f)
     viewProjMat: mat4x4f,
+    
+    // TODO-2: add extra functions to set values needed for light clustering here
+    viewMat: mat4x4f,
+    screenWidth: f32,
+    screenHeight: f32,
+    clusterSizeX: f32,
+    clusterSizeY: f32,
+    clusterSizeZ: f32,
+    nearPlane: f32,
+    farPlane: f32,
+    _padding1: f32,
+    _padding2: f32,
+    _padding3: f32
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius
