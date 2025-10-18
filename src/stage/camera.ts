@@ -29,6 +29,12 @@ class CameraUniforms {
         this.floatView[37] = near;
         this.floatView[38] = far;
     }
+
+    setCameraPosition(pos: Vec3) {
+        this.floatView[39] = pos[0];
+        this.floatView[40] = pos[1];
+        this.floatView[41] = pos[2];
+    }
 }
 
 export class Camera {
@@ -164,6 +170,7 @@ export class Camera {
             Camera.nearPlane,
             Camera.farPlane
         );
+        this.uniforms.setCameraPosition(this.cameraPos);
 
         // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`

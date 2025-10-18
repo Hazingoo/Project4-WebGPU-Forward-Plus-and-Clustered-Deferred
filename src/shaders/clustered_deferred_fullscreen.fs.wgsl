@@ -9,8 +9,9 @@
 
 @group(1) @binding(0) var gBufferAlbedo: texture_2d<f32>;
 @group(1) @binding(1) var gBufferNormal: texture_2d<f32>;
-@group(1) @binding(2) var gBufferDepth: texture_depth_2d;
-@group(1) @binding(3) var gBufferSampler: sampler;
+@group(1) @binding(2) var gBufferPosition: texture_2d<f32>;
+@group(1) @binding(3) var gBufferDepth: texture_2d<f32>;
+@group(1) @binding(4) var gBufferSampler: sampler;
 
 struct FragmentInput
 {
@@ -34,39 +35,38 @@ fn getClusterIndex(clusterX: u32, clusterY: u32, clusterZ: u32) -> u32 {
            clusterY * u32(cameraUniforms.clusterSizeX) + clusterX;
 }
 
-fn reconstructWorldPosition(uv: vec2f, depth: f32) -> vec3f {
-    let ndc = vec2f(
-        uv.x * 2.0 - 1.0,
-        (1.0 - uv.y) * 2.0 - 1.0  // Flip Y for NDC
-    );
-    
-    let aspectRatio = cameraUniforms.screenWidth / cameraUniforms.screenHeight;
-    let tanHalfFovY = 0.4142135623730951; // tan(22.5 degrees) for 45 degree FOV
-    let tanHalfFovX = tanHalfFovY * aspectRatio;
-    
-    let viewSpacePos = vec3f(
-        ndc.x * tanHalfFovX * depth,
-        ndc.y * tanHalfFovY * depth,
-        -depth
-    );
-    
-    return viewSpacePos;
-}
-
 @fragment
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
-    let albedo = textureSample(gBufferAlbedo, gBufferSampler, in.uv);
-    let normalPacked = textureSample(gBufferNormal, gBufferSampler, in.uv);
-    let depth = textureSample(gBufferDepth, gBufferSampler, in.uv);
+    let pixelCoord = vec2i(in.fragCoord.xy);
     
-    let normal = normalize(normalPacked.xyz * 2.0 - 1.0);
+    let albedo = textureLoad(gBufferAlbedo, pixelCoord, 0);
+    let normalPacked = textureLoad(gBufferNormal, pixelCoord, 0);
+    let worldPos = textureLoad(gBufferPosition, pixelCoord, 0).xyz;
+    let linearDepth = textureLoad(gBufferDepth, pixelCoord, 0).r;
     
-    let ndcDepth = depth;
-    let near = cameraUniforms.nearPlane;
-    let far = cameraUniforms.farPlane;
-    let linearDepth = (2.0 * near * far) / (far + near - ndcDepth * (far - near));
+    let worldNormal = normalize(normalPacked.xyz * 2.0 - 1.0);
     
+    let debugMode = 0;
+    
+    if (debugMode == 1) {
+        return vec4f(albedo.rgb, 1.0);
+    } else if (debugMode == 2) {
+        // Show normals 
+        return vec4f(worldNormal * 0.5 + 0.5, 1.0);
+    } else if (debugMode == 3) {
+        // Show position
+        let posVisualized = fract(worldPos * 0.2);
+        return vec4f(posVisualized, 1.0);
+    } else if (debugMode == 4) {
+    // Show depth
+    let depthNormalized = clamp(linearDepth / cameraUniforms.farPlane, 0.0, 1.0);
+        return vec4f(vec3f(depthNormalized), 1.0);
+    }
+    
+
+    
+
     let screenX = in.fragCoord.x / cameraUniforms.screenWidth;
     let screenY = in.fragCoord.y / cameraUniforms.screenHeight;
     
@@ -75,25 +75,19 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     
     let clusterInfo = clusterSet.clusterLightInfos[clusterIndex];
     
-    let posViewSpace = reconstructWorldPosition(in.uv, linearDepth);
-    
-    let normalViewSpace = (cameraUniforms.viewMat * vec4f(normal, 0.0)).xyz;
-    
     var totalLightContrib = vec3f(0.1, 0.1, 0.1);
     
     for (var i = 0u; i < clusterInfo.lightCount; i++) {
         let lightIdx = clusterLightIndices.lightIndices[clusterInfo.lightOffset + i];
         let light = lightSet.lights[lightIdx];
         
-        let lightPosViewSpace = (cameraUniforms.viewMat * vec4f(light.pos, 1.0)).xyz;
-        
-        let vecToLight = lightPosViewSpace - posViewSpace;
+        let vecToLight = light.pos - worldPos;
         let distToLight = length(vecToLight);
         let lightRadius = f32(${lightRadius});
         
         let attenuation = clamp(1.0 - pow(distToLight / lightRadius, 4.0), 0.0, 1.0) / (distToLight * distToLight);
         
-        let lambert = max(dot(normalViewSpace, normalize(vecToLight)), 0.0);
+        let lambert = max(dot(worldNormal, normalize(vecToLight)), 0.0);
         
         totalLightContrib += light.color * lambert * attenuation;
     }

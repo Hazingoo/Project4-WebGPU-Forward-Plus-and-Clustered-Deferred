@@ -19,9 +19,9 @@ fn main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput
     );
     
     var uvs = array<vec2f, 3>(
-        vec2f(0.0, 0.0),
-        vec2f(2.0, 0.0),
-        vec2f(0.0, 2.0)
+        vec2f(0.0, 1.0),   // bottom-left
+        vec2f(2.0, 1.0),   // bottom-right
+        vec2f(0.0, -1.0)   // top-left
     );
     
     var output: VertexOutput;

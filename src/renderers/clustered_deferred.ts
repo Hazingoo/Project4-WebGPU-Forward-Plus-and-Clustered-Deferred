@@ -15,12 +15,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     gBufferAlbedoView!: GPUTextureView;
     gBufferNormal!: GPUTexture;
     gBufferNormalView!: GPUTextureView;
+    gBufferPosition!: GPUTexture;
+    gBufferPositionView!: GPUTextureView;
     gBufferDepth!: GPUTexture;
     gBufferDepthView!: GPUTextureView;
 
     gBufferBindGroupLayout!: GPUBindGroupLayout;
     gBufferBindGroup!: GPUBindGroup;
     gBufferSampler!: GPUSampler;
+
+    depthTexture!: GPUTexture;
+    depthTextureView!: GPUTextureView;
 
     geometryPassPipeline!: GPURenderPipeline;
     cameraBindGroupLayout!: GPUBindGroupLayout;
@@ -62,13 +67,29 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         });
         this.gBufferNormalView = this.gBufferNormal.createView();
 
+        this.gBufferPosition = renderer.device.createTexture({
+            label: "G-Buffer Position",
+            size: [width, height],
+            format: "rgba16float",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+        this.gBufferPositionView = this.gBufferPosition.createView();
+
         this.gBufferDepth = renderer.device.createTexture({
             label: "G-Buffer Depth",
             size: [width, height],
-            format: "depth24plus",
+            format: "r32float",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
         this.gBufferDepthView = this.gBufferDepth.createView();
+
+        this.depthTexture = renderer.device.createTexture({
+            label: "Depth Texture",
+            size: [width, height],
+            format: "depth24plus",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT
+        });
+        this.depthTextureView = this.depthTexture.createView();
 
         this.gBufferSampler = renderer.device.createSampler({
             label: "G-Buffer Sampler",
@@ -92,12 +113,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 {
                     binding: 2,
                     visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: "depth" }
+                    texture: { sampleType: "float" }
                 },
                 {
                     binding: 3,
                     visibility: GPUShaderStage.FRAGMENT,
-                    sampler: {}
+                    texture: { sampleType: "unfilterable-float" }
+                },
+                {
+                    binding: 4,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    sampler: { type: "non-filtering" }
                 }
             ]
         });
@@ -116,10 +142,14 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 },
                 {
                     binding: 2,
-                    resource: this.gBufferDepthView
+                    resource: this.gBufferPositionView
                 },
                 {
                     binding: 3,
+                    resource: this.gBufferDepthView
+                },
+                {
+                    binding: 4,
                     resource: this.gBufferSampler
                 }
             ]
@@ -214,7 +244,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             entries: [
                 {
                     binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: { type: "uniform" }
                 }
             ]
@@ -241,11 +271,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     renderer.materialBindGroupLayout
                 ]
             }),
-            depthStencil: {
-                depthWriteEnabled: true,
-                depthCompare: "less",
-                format: "depth24plus"
-            },
             vertex: {
                 module: renderer.device.createShaderModule({
                     label: "clustered deferred vert shader",
@@ -260,12 +285,27 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 }),
                 targets: [
                     {
+                        // Albedo
                         format: "rgba8unorm"
                     },
                     {
+                        // Normal
                         format: "rgba16float"
+                    },
+                    {
+                        // Position
+                        format: "rgba16float"
+                    },
+                    {
+                        // Depth
+                        format: "r32float"
                     }
                 ]
+            },
+            depthStencil: {
+                format: "depth24plus",
+                depthWriteEnabled: true,
+                depthCompare: "less"
             }
         });
     }
@@ -351,9 +391,94 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     }
 
     override draw() {
+
         // TODO-3: run the Forward+ rendering pass:
         // - run the clustering compute shader
         // - run the G-buffer pass, outputting position, albedo, and normals
         // - run the fullscreen pass, which reads from the G-buffer and performs lighting calculations
+        const encoder = renderer.device.createCommandEncoder();
+
+        const computePass = encoder.beginComputePass();
+        computePass.setPipeline(this.clusteringComputePipeline);
+        computePass.setBindGroup(0, this.clusteringBindGroup);
+
+        const numClusters = shaders.constants.clusterSizeX * shaders.constants.clusterSizeY * shaders.constants.clusterSizeZ;
+        const workgroupCount = Math.ceil(numClusters / shaders.constants.clusteringWorkgroupSize);
+        computePass.dispatchWorkgroups(workgroupCount);
+        computePass.end();
+
+        const geometryPass = encoder.beginRenderPass({
+            label: "clustered deferred geometry pass",
+            colorAttachments: [
+                {
+                    view: this.gBufferAlbedoView,
+                    clearValue: [0, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "store"
+                },
+                {
+                    view: this.gBufferNormalView,
+                    clearValue: [0, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "store"
+                },
+                {
+                    view: this.gBufferPositionView,
+                    clearValue: [0, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "store"
+                },
+                {
+                    view: this.gBufferDepthView,
+                    clearValue: [1000, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "store"
+                }
+            ],
+            depthStencilAttachment: {
+                view: this.depthTextureView,
+                depthClearValue: 1.0,
+                depthLoadOp: "clear",
+                depthStoreOp: "store"
+            }
+        });
+
+        geometryPass.setPipeline(this.geometryPassPipeline);
+        geometryPass.setBindGroup(shaders.constants.bindGroup_scene, this.cameraBindGroup);
+
+        this.scene.iterate(node => {
+            geometryPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
+        }, material => {
+            geometryPass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
+        }, primitive => {
+            geometryPass.setVertexBuffer(0, primitive.vertexBuffer);
+            geometryPass.setIndexBuffer(primitive.indexBuffer, 'uint32');
+            geometryPass.drawIndexed(primitive.numIndices);
+        });
+
+        geometryPass.end();
+
+        const canvasTextureView = renderer.context.getCurrentTexture().createView();
+        const fullscreenPass = encoder.beginRenderPass({
+            label: "clustered deferred fullscreen pass",
+            colorAttachments: [
+                {
+                    view: canvasTextureView,
+                    clearValue: [0, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "store"
+                }
+            ]
+        });
+
+        fullscreenPass.setPipeline(this.fullscreenPassPipeline);
+        fullscreenPass.setBindGroup(0, this.sceneBindGroup);
+        fullscreenPass.setBindGroup(1, this.gBufferBindGroup);
+
+        fullscreenPass.draw(3, 1, 0, 0);
+
+        fullscreenPass.end();
+
+        renderer.device.queue.submit([encoder.finish()]);
     }
 }

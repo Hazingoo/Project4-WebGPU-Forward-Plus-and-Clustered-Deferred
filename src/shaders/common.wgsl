@@ -40,9 +40,8 @@ struct CameraUniforms {
     clusterSizeZ: f32,
     nearPlane: f32,
     farPlane: f32,
-    _padding1: f32,
-    _padding2: f32,
-    _padding3: f32
+    cameraPos: vec3f,
+    _padding1: f32
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius
