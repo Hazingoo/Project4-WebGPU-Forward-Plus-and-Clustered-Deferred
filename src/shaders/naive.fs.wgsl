@@ -18,7 +18,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         discard;
     }
 
-    var totalLightContrib = vec3f(0, 0, 0);
+    var totalLightContrib = vec3f(0.1, 0.1, 0.1);
     for (var lightIdx = 0u; lightIdx < lightSet.numLights; lightIdx++) {
         let light = lightSet.lights[lightIdx];
         totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));

@@ -33,25 +33,63 @@ fn getClusterIndex(clusterX: u32, clusterY: u32, clusterZ: u32) -> u32 {
 }
 
 fn screenToCluster(screenX: f32, screenY: f32, depth: f32) -> vec3u {
-    let clusterX = u32(screenX * cameraUniforms.clusterSizeX);
-    let clusterY = u32(screenY * cameraUniforms.clusterSizeY);
+    let clusterX = u32(clamp(screenX * cameraUniforms.clusterSizeX, 0.0, cameraUniforms.clusterSizeX - 1.0));
+    let clusterY = u32(clamp(screenY * cameraUniforms.clusterSizeY, 0.0, cameraUniforms.clusterSizeY - 1.0));
     
-    let logDepth = log(depth / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane);
-    let clusterZ = u32(logDepth * cameraUniforms.clusterSizeZ);
+    let clampedDepth = clamp(depth, cameraUniforms.nearPlane, cameraUniforms.farPlane);
+    let logDepth = log(clampedDepth / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane);
+    let clusterZ = u32(clamp(logDepth * cameraUniforms.clusterSizeZ, 0.0, cameraUniforms.clusterSizeZ - 1.0));
     
     return vec3u(clusterX, clusterY, clusterZ);
 }
 
+
+fn screenToView(screenCoord: vec2f, depth: f32) -> vec3f {
+    let ndc = vec2f(
+        screenCoord.x * 2.0 - 1.0,
+        (1.0 - screenCoord.y) * 2.0 - 1.0  
+    );
+    
+    let aspectRatio = cameraUniforms.screenWidth / cameraUniforms.screenHeight;
+    let tanHalfFovY = 0.4142135623730951; 
+    let tanHalfFovX = tanHalfFovY * aspectRatio;
+    
+    return vec3f(
+        ndc.x * tanHalfFovX * depth,
+        ndc.y * tanHalfFovY * depth,
+        -depth
+    );
+}
+
 fn lightIntersectsCluster(light: Light, clusterX: u32, clusterY: u32, clusterZ: u32) -> bool {
-    let clusterScreenX = f32(clusterX) / cameraUniforms.clusterSizeX;
-    let clusterScreenY = f32(clusterY) / cameraUniforms.clusterSizeY;
+    let lightRadius = f32(${lightRadius});
+    
+    let lightPosView = (cameraUniforms.viewMat * vec4f(light.pos, 1.0)).xyz;
     
     let clusterDepthNear = cameraUniforms.nearPlane * pow(cameraUniforms.farPlane / cameraUniforms.nearPlane, f32(clusterZ) / cameraUniforms.clusterSizeZ);
     let clusterDepthFar = cameraUniforms.nearPlane * pow(cameraUniforms.farPlane / cameraUniforms.nearPlane, f32(clusterZ + 1) / cameraUniforms.clusterSizeZ);
     
-    let lightRadius = ${lightRadius};
+    let clusterMinScreen = vec2f(f32(clusterX) / cameraUniforms.clusterSizeX, 
+                                   f32(clusterY) / cameraUniforms.clusterSizeY);
+    let clusterMaxScreen = vec2f(f32(clusterX + 1) / cameraUniforms.clusterSizeX, 
+                                   f32(clusterY + 1) / cameraUniforms.clusterSizeY);
     
-    return true; 
+    let v1 = screenToView(clusterMinScreen, clusterDepthNear);
+    let v2 = screenToView(vec2f(clusterMaxScreen.x, clusterMinScreen.y), clusterDepthNear);
+    let v3 = screenToView(vec2f(clusterMinScreen.x, clusterMaxScreen.y), clusterDepthNear);
+    let v4 = screenToView(clusterMaxScreen, clusterDepthNear);
+    let v5 = screenToView(clusterMinScreen, clusterDepthFar);
+    let v6 = screenToView(vec2f(clusterMaxScreen.x, clusterMinScreen.y), clusterDepthFar);
+    let v7 = screenToView(vec2f(clusterMinScreen.x, clusterMaxScreen.y), clusterDepthFar);
+    let v8 = screenToView(clusterMaxScreen, clusterDepthFar);
+    
+    var minBounds = min(min(min(v1, v2), min(v3, v4)), min(min(v5, v6), min(v7, v8)));
+    var maxBounds = max(max(max(v1, v2), max(v3, v4)), max(max(v5, v6), max(v7, v8)));
+    
+    let closestPoint = clamp(lightPosView, minBounds, maxBounds);
+    let distanceSquared = dot(lightPosView - closestPoint, lightPosView - closestPoint);
+    
+    return distanceSquared <= (lightRadius * lightRadius);
 }
 
 @compute @workgroup_size(${clusteringWorkgroupSize})

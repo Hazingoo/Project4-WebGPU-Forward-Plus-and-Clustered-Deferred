@@ -31,11 +31,12 @@ struct FragmentInput
 }
 
 fn screenToCluster(screenX: f32, screenY: f32, depth: f32) -> vec3u {
-    let clusterX = u32(screenX * cameraUniforms.clusterSizeX);
-    let clusterY = u32(screenY * cameraUniforms.clusterSizeY);
+    let clusterX = u32(clamp(screenX * cameraUniforms.clusterSizeX, 0.0, cameraUniforms.clusterSizeX - 1.0));
+    let clusterY = u32(clamp(screenY * cameraUniforms.clusterSizeY, 0.0, cameraUniforms.clusterSizeY - 1.0));
     
-    let logDepth = log(depth / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane);
-    let clusterZ = u32(logDepth * cameraUniforms.clusterSizeZ);
+    let clampedDepth = clamp(depth, cameraUniforms.nearPlane, cameraUniforms.farPlane);
+    let logDepth = log(clampedDepth / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane);
+    let clusterZ = u32(clamp(logDepth * cameraUniforms.clusterSizeZ, 0.0, cameraUniforms.clusterSizeZ - 1.0));
     
     return vec3u(clusterX, clusterY, clusterZ);
 }
@@ -56,17 +57,15 @@ fn main(in: FragmentInput, @builtin(position) fragCoord: vec4f) -> @location(0) 
     let screenX = fragCoord.x / cameraUniforms.screenWidth;
     let screenY = fragCoord.y / cameraUniforms.screenHeight;
     
-    let depth = length(in.pos);
+    let posView = (cameraUniforms.viewMat * vec4f(in.pos, 1.0)).xyz;
+    let depth = -posView.z;  
     
     let clusterCoords = screenToCluster(screenX, screenY, depth);
     let clusterIndex = getClusterIndex(clusterCoords.x, clusterCoords.y, clusterCoords.z);
     
-    let maxClusters = u32(cameraUniforms.clusterSizeX) * u32(cameraUniforms.clusterSizeY) * u32(cameraUniforms.clusterSizeZ);
-    let clampedClusterIndex = min(clusterIndex, maxClusters - 1u);
+    let clusterInfo = clusterSet.clusterLightInfos[clusterIndex];
     
-    let clusterInfo = clusterSet.clusterLightInfos[clampedClusterIndex];
-    
-    var totalLightContrib = vec3f(0, 0, 0);
+    var totalLightContrib = vec3f(0.1, 0.1, 0.1);
     
     for (var i = 0u; i < clusterInfo.lightCount; i++) {
         let lightIdx = clusterLightIndices.lightIndices[clusterInfo.lightOffset + i];

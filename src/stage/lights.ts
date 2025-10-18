@@ -82,7 +82,7 @@ export class Lights {
             label: "move lights compute pipeline",
             layout: device.createPipelineLayout({
                 label: "move lights compute pipeline layout",
-                bindGroupLayouts: [ this.moveLightsComputeBindGroupLayout ]
+                bindGroupLayouts: [this.moveLightsComputeBindGroupLayout]
             }),
             compute: {
                 module: device.createShaderModule({
