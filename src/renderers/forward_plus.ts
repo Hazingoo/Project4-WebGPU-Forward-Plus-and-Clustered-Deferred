@@ -7,6 +7,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
     // you may need extra uniforms such as the camera view matrix and the canvas resolution
 
     clusterSetBuffer: GPUBuffer;
+    clusterLightIndicesBuffer: GPUBuffer;
     clusteringBindGroupLayout: GPUBindGroupLayout;
     clusteringBindGroup: GPUBindGroup;
     clusteringComputePipeline: GPUComputePipeline;
@@ -33,7 +34,13 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
         this.clusterSetBuffer = renderer.device.createBuffer({
             label: "cluster set buffer",
-            size: 4 + (numClusters * clusterLightInfoSize) + (maxLightIndices * 4),
+            size: 4 + (numClusters * clusterLightInfoSize),
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        this.clusterLightIndicesBuffer = renderer.device.createBuffer({
+            label: "cluster light indices buffer",
+            size: maxLightIndices * 4,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
@@ -52,6 +59,11 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 },
                 {
                     binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                {
+                    binding: 3,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "storage" }
                 }
@@ -73,6 +85,10 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 {
                     binding: 2,
                     resource: { buffer: this.clusterSetBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.clusterLightIndicesBuffer }
                 }
             ]
         });
@@ -111,6 +127,11 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                     binding: 2,
                     visibility: GPUShaderStage.FRAGMENT,
                     buffer: { type: "read-only-storage" }
+                },
+                {
+                    binding: 3,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
                 }
             ]
         });
@@ -131,6 +152,10 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 {
                     binding: 2,
                     resource: { buffer: this.clusterSetBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.clusterLightIndicesBuffer }
                 }
             ]
         });

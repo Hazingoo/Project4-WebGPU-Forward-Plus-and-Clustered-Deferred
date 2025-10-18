@@ -17,12 +17,12 @@ class CameraUniforms {
         this.floatView.set(mat, 16);
     }
 
-    set screenDimensions(width: number, height: number) {
+    setScreenDimensions(width: number, height: number) {
         this.floatView[32] = width;
         this.floatView[33] = height;
     }
 
-    set clusterParameters(sizeX: number, sizeY: number, sizeZ: number, near: number, far: number) {
+    setClusterParameters(sizeX: number, sizeY: number, sizeZ: number, near: number, far: number) {
         this.floatView[34] = sizeX;
         this.floatView[35] = sizeY;
         this.floatView[36] = sizeZ;
@@ -156,8 +156,8 @@ export class Camera {
 
         // TODO-2: write to extra buffers needed for light clustering here
         this.uniforms.viewMat = viewMat;
-        this.uniforms.screenDimensions(canvas.width, canvas.height);
-        this.uniforms.clusterParameters(
+        this.uniforms.setScreenDimensions(canvas.width, canvas.height);
+        this.uniforms.setClusterParameters(
             constants.clusterSizeX,
             constants.clusterSizeY,
             constants.clusterSizeZ,

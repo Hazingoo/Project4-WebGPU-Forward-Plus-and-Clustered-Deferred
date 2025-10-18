@@ -25,6 +25,7 @@
 @group(0) @binding(0) var<uniform> cameraUniforms: CameraUniforms;
 @group(0) @binding(1) var<storage, read> lightSet: LightSet;
 @group(0) @binding(2) var<storage, read_write> clusterSet: ClusterSet;
+@group(0) @binding(3) var<storage, read_write> clusterLightIndices: ClusterLightIndices;
 
 fn getClusterIndex(clusterX: u32, clusterY: u32, clusterZ: u32) -> u32 {
     return clusterZ * u32(cameraUniforms.clusterSizeX) * u32(cameraUniforms.clusterSizeY) + 
@@ -76,7 +77,7 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
         let light = lightSet.lights[lightIdx];
         
         if (lightIntersectsCluster(light, clusterX, clusterY, clusterZ)) {
-            clusterSet.lightIndices[lightOffset + lightCount] = lightIdx;
+            clusterLightIndices.lightIndices[lightOffset + lightCount] = lightIdx;
             lightCount++;
         }
     }

@@ -18,6 +18,7 @@
 @group(${bindGroup_scene}) @binding(0) var<uniform> cameraUniforms: CameraUniforms;
 @group(${bindGroup_scene}) @binding(1) var<storage, read> lightSet: LightSet;
 @group(${bindGroup_scene}) @binding(2) var<storage, read> clusterSet: ClusterSet;
+@group(${bindGroup_scene}) @binding(3) var<storage, read> clusterLightIndices: ClusterLightIndices;
 
 @group(${bindGroup_material}) @binding(0) var diffuseTex: texture_2d<f32>;
 @group(${bindGroup_material}) @binding(1) var diffuseTexSampler: sampler;
@@ -68,7 +69,7 @@ fn main(in: FragmentInput, @builtin(position) fragCoord: vec4f) -> @location(0) 
     var totalLightContrib = vec3f(0, 0, 0);
     
     for (var i = 0u; i < clusterInfo.lightCount; i++) {
-        let lightIdx = clusterSet.lightIndices[clusterInfo.lightOffset + i];
+        let lightIdx = clusterLightIndices.lightIndices[clusterInfo.lightOffset + i];
         let light = lightSet.lights[lightIdx];
         totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
     }

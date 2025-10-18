@@ -20,7 +20,10 @@ struct ClusterLightInfo {
 
 struct ClusterSet {
     numClusters: u32,
-    clusterLightInfos: array<ClusterLightInfo>,
+    clusterLightInfos: array<ClusterLightInfo>
+}
+
+struct ClusterLightIndices {
     lightIndices: array<u32>
 }
 
