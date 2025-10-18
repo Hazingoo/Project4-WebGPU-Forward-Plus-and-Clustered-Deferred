@@ -5,33 +5,35 @@ import { Stage } from '../stage/stage';
 export class ClusteredDeferredRenderer extends renderer.Renderer {
     // TODO-3: add layouts, pipelines, textures, etc. needed for Forward+ here
     // you may need extra uniforms such as the camera view matrix and the canvas resolution
-    clusterSetBuffer: GPUBuffer;
-    clusterLightIndicesBuffer: GPUBuffer;
-    clusteringBindGroupLayout: GPUBindGroupLayout;
-    clusteringBindGroup: GPUBindGroup;
-    clusteringComputePipeline: GPUComputePipeline;
+    clusterSetBuffer!: GPUBuffer;
+    clusterLightIndicesBuffer!: GPUBuffer;
+    clusteringBindGroupLayout!: GPUBindGroupLayout;
+    clusteringBindGroup!: GPUBindGroup;
+    clusteringComputePipeline!: GPUComputePipeline;
 
-    gBufferAlbedo: GPUTexture;
-    gBufferAlbedoView: GPUTextureView;
-    gBufferNormal: GPUTexture;
-    gBufferNormalView: GPUTextureView;
-    gBufferDepth: GPUTexture;
-    gBufferDepthView: GPUTextureView;
+    gBufferAlbedo!: GPUTexture;
+    gBufferAlbedoView!: GPUTextureView;
+    gBufferNormal!: GPUTexture;
+    gBufferNormalView!: GPUTextureView;
+    gBufferDepth!: GPUTexture;
+    gBufferDepthView!: GPUTextureView;
 
-    gBufferBindGroupLayout: GPUBindGroupLayout;
-    gBufferBindGroup: GPUBindGroup;
-    gBufferSampler: GPUSampler;
+    gBufferBindGroupLayout!: GPUBindGroupLayout;
+    gBufferBindGroup!: GPUBindGroup;
+    gBufferSampler!: GPUSampler;
 
+    geometryPassPipeline!: GPURenderPipeline;
+    cameraBindGroupLayout!: GPUBindGroupLayout;
+    cameraBindGroup!: GPUBindGroup;
 
     constructor(stage: Stage) {
         super(stage);
 
-        // TODO-3: initialize layouts, pipelines, textures, etc. needed for Forward+ here
-        // you'll need two pipelines: one for the G-buffer pass and one for the fullscreen pass
         this.setupGBuffer();
 
         this.setupClusteringInfrastructure();
 
+        this.setupGeometryPass();
 
     }
 
@@ -197,6 +199,68 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     code: shaders.clusteringComputeSrc
                 }),
                 entryPoint: "main"
+            }
+        });
+    }
+
+    private setupGeometryPass() {
+        this.cameraBindGroupLayout = renderer.device.createBindGroupLayout({
+            label: "camera bind group layout",
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.VERTEX,
+                    buffer: { type: "uniform" }
+                }
+            ]
+        });
+
+        this.cameraBindGroup = renderer.device.createBindGroup({
+            label: "camera bind group",
+            layout: this.cameraBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: this.camera.uniformsBuffer }
+                }
+            ]
+        });
+
+        this.geometryPassPipeline = renderer.device.createRenderPipeline({
+            label: "clustered deferred geometry pass pipeline",
+            layout: renderer.device.createPipelineLayout({
+                label: "clustered deferred geometry pass pipeline layout",
+                bindGroupLayouts: [
+                    this.cameraBindGroupLayout,
+                    renderer.modelBindGroupLayout,
+                    renderer.materialBindGroupLayout
+                ]
+            }),
+            depthStencil: {
+                depthWriteEnabled: true,
+                depthCompare: "less",
+                format: "depth24plus"
+            },
+            vertex: {
+                module: renderer.device.createShaderModule({
+                    label: "clustered deferred vert shader",
+                    code: shaders.naiveVertSrc
+                }),
+                buffers: [renderer.vertexBufferLayout]
+            },
+            fragment: {
+                module: renderer.device.createShaderModule({
+                    label: "clustered deferred frag shader",
+                    code: shaders.clusteredDeferredFragSrc
+                }),
+                targets: [
+                    {
+                        format: "rgba8unorm"
+                    },
+                    {
+                        format: "rgba16float"
+                    }
+                ]
             }
         });
     }
