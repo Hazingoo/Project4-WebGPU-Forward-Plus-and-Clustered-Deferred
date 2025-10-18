@@ -14,3 +14,65 @@
 //     Add the calculated contribution to the total light accumulation.
 // Multiply the fragment’s diffuse color by the accumulated light contribution.
 // Return the final color, ensuring that the alpha component is set appropriately (typically to 1).
+
+@group(${bindGroup_scene}) @binding(0) var<uniform> cameraUniforms: CameraUniforms;
+@group(${bindGroup_scene}) @binding(1) var<storage, read> lightSet: LightSet;
+@group(${bindGroup_scene}) @binding(2) var<storage, read> clusterSet: ClusterSet;
+
+@group(${bindGroup_material}) @binding(0) var diffuseTex: texture_2d<f32>;
+@group(${bindGroup_material}) @binding(1) var diffuseTexSampler: sampler;
+
+struct FragmentInput
+{
+    @location(0) pos: vec3f,
+    @location(1) nor: vec3f,
+    @location(2) uv: vec2f
+}
+
+fn screenToCluster(screenX: f32, screenY: f32, depth: f32) -> vec3u {
+    let clusterX = u32(screenX * cameraUniforms.clusterSizeX);
+    let clusterY = u32(screenY * cameraUniforms.clusterSizeY);
+    
+    let logDepth = log(depth / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane);
+    let clusterZ = u32(logDepth * cameraUniforms.clusterSizeZ);
+    
+    return vec3u(clusterX, clusterY, clusterZ);
+}
+
+fn getClusterIndex(clusterX: u32, clusterY: u32, clusterZ: u32) -> u32 {
+    return clusterZ * u32(cameraUniforms.clusterSizeX) * u32(cameraUniforms.clusterSizeY) + 
+           clusterY * u32(cameraUniforms.clusterSizeX) + clusterX;
+}
+
+@fragment
+fn main(in: FragmentInput, @builtin(position) fragCoord: vec4f) -> @location(0) vec4f
+{
+    let diffuseColor = textureSample(diffuseTex, diffuseTexSampler, in.uv);
+    if (diffuseColor.a < 0.5f) {
+        discard;
+    }
+
+    let screenX = fragCoord.x / cameraUniforms.screenWidth;
+    let screenY = fragCoord.y / cameraUniforms.screenHeight;
+    
+    let depth = length(in.pos);
+    
+    let clusterCoords = screenToCluster(screenX, screenY, depth);
+    let clusterIndex = getClusterIndex(clusterCoords.x, clusterCoords.y, clusterCoords.z);
+    
+    let maxClusters = u32(cameraUniforms.clusterSizeX) * u32(cameraUniforms.clusterSizeY) * u32(cameraUniforms.clusterSizeZ);
+    let clampedClusterIndex = min(clusterIndex, maxClusters - 1u);
+    
+    let clusterInfo = clusterSet.clusterLightInfos[clampedClusterIndex];
+    
+    var totalLightContrib = vec3f(0, 0, 0);
+    
+    for (var i = 0u; i < clusterInfo.lightCount; i++) {
+        let lightIdx = clusterSet.lightIndices[clusterInfo.lightOffset + i];
+        let light = lightSet.lights[lightIdx];
+        totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
+    }
+
+    var finalColor = diffuseColor.rgb * totalLightContrib;
+    return vec4(finalColor, 1);
+}
