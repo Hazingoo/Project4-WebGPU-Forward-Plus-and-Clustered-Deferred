@@ -80,7 +80,7 @@ Clustered Deferred rendering combines the benefits of deferred shading with ligh
 ## Performance Analysis
 All benchmarks are performed on my macbook air M2 2022
 
-### I. Comparison and Analysis of Forward+ and Clustered Deferred Shading
+### Comparison and Analysis of Forward+ and Clustered Deferred Shading
 
 **Is one of them faster?**
 
@@ -137,24 +137,6 @@ The dramatic performance differences are caused by the algorithmic complexity:
 - Clustered Deferred shows ~157x improvement over Naive at 1000 lights
 - Clustered Deferred is consistently 3-4x faster than Forward+ across all light counts
 
-### II. Performance Feature Analysis
-
-**Forward+ Clustering Optimization:**
-- **Overview**: Divides view frustum into 3D clusters and pre-computes light assignments
-- **Performance Improvement**: Reduces light evaluation from O(pixels × lights) to O(pixels × cluster_lights)
-- **Best Case**: When lights are well-distributed across clusters - shows 14x improvement over Naive at 1000 lights
-- **Worst Case**: When many lights concentrate in a few clusters - still maintains 12.8x improvement over Naive at 5000 lights
-- **Tradeoffs**: Additional compute shader pass, memory overhead for cluster data
-- **Parameter Effects**: Performance scales linearly with light count (187.7ms at 1000 lights to 1416.5ms at 5000 lights)
-
-
-**Clustered Deferred G-Buffer:**
-- **Overview**: Two-pass technique separating geometry and lighting calculations
-- **Performance Improvement**: Enables efficient lighting for complex scenes shows 157x improvement over Naive at 1000 lights
-- **Best Case**: Scenes with many overlapping objects - maintains sub-500ms frame times even at 5000 lights
-- **Worst Case**: Simple scenes where geometry pass overhead dominates - still outperforms Forward+ by 3-4x
-- **Tradeoffs**: Memory bandwidth for G-buffer, additional render pass
-- **Parameter Effects**: Performance scales sub linearly with light count 16.8ms at 1000 lights to 400.8ms at 5000 lights
 
 
 
